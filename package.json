@@ -1,0 +1,53 @@
+{
+  "name": "@subhamoy/somoy",
+  "version": "0.1.0",
+  "description": "Somoy (Bengali for 'time') — a transparent, hand-rolled AI Agent SDK for TypeScript. Provider-agnostic, zod-typed, runtime-agnostic (Bun + Node 18+).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test",
+    "example": "bun run examples/basic.ts",
+    "example:handoff": "bun run examples/handoff-router.ts",
+    "example:structured": "bun run examples/structured-output.ts",
+    "example:streaming": "bun run examples/streaming.ts",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "sdk",
+    "llm",
+    "typescript",
+    "providers",
+    "zod",
+    "runtime"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "eventemitter3": "^5.0.1",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "vitepress": "^1.3.0"
+  }
+}
