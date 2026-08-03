@@ -127,7 +127,7 @@ async function callModel(
   const opts = {
     tools,
     temperature: 0.2,
-    jsonMode: !!state.config.outputSchema,
+    jsonMode: !!state.config.outputSchema && tools.length === 0,
     signal: ctx.runAbort.signal,
   };
   const out = await retryWithBackoff({
@@ -170,15 +170,16 @@ async function executeTool(state: RunState, ctx: LoopContext, call: ToolCallReco
   const tool = (state.config.tools ?? []).find((t) => t.name === call.name);
   const gr = await runToolGuardrails(state.config, tool, call.args, state.agentName, ctx.events, ctx.runId);
   if (!gr.pass) {
-    return { toolCallId: call.id, ok: false, error: gr.reason ?? `Tool '${call.name}' blocked by a guardrail.`, durationMs: 0 };
+    return { toolCallId: call.id, name: call.name, ok: false, error: gr.reason ?? `Tool '${call.name}' blocked by a guardrail.`, durationMs: 0 };
   }
   if (!tool) {
-    return { toolCallId: call.id, ok: false, error: `Unknown tool '${call.name}'.`, durationMs: 0 };
+    return { toolCallId: call.id, name: call.name, ok: false, error: `Unknown tool '${call.name}'.`, durationMs: 0 };
   }
   const parsed = tool.inputSchema.safeParse(call.args);
   if (!parsed.success) {
     return {
       toolCallId: call.id,
+      name: call.name,
       ok: false,
       error: `Invalid arguments for '${call.name}': ${parsed.error.issues.map((i) => i.message).join('; ')}`,
       durationMs: 0,
@@ -190,17 +191,18 @@ async function executeTool(state: RunState, ctx: LoopContext, call: ToolCallReco
   const wireAbort = () => toolAbort.abort();
   ctx.runAbort.signal.addEventListener('abort', wireAbort, { once: true });
   const finish = (rec: ToolResultRecord) => {
+    const record: ToolResultRecord = { name: call.name, ...rec };
     ctx.events.emit({
       type: 'tool:end',
       runId: ctx.runId,
       toolCallId: call.id,
       name: tool.name,
-      ok: rec.ok,
-      data: rec.data,
-      error: rec.error,
-      durationMs: rec.durationMs ?? 0,
+      ok: record.ok,
+      data: record.data,
+      error: record.error,
+      durationMs: record.durationMs ?? 0,
     });
-    return rec;
+    return record;
   };
   try {
     const out = await tool.execute(parsed.data, {
@@ -290,7 +292,7 @@ async function loop(state: RunState, ctx: LoopContext): Promise<RunResult> {
               role: 'tool',
               agentName: state.agentName,
               toolResults: [
-                { toolCallId: call.id, ok: false, error: `Invalid handoff arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}` },
+                { toolCallId: call.id, name: call.name, ok: false, error: `Invalid handoff arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}` },
               ],
             });
             continue;
@@ -328,6 +330,7 @@ async function handleHandoff(
       toolResults: [
         {
           toolCallId: call.id,
+          name: call.name,
           ok: false,
           error: `Unknown agent '${receiver}'. Available agents: [${[...ctx.registry.keys()].join(', ')}].`,
         },
@@ -352,7 +355,7 @@ async function handleHandoff(
   await appendTurn(state, {
     role: 'tool',
     agentName: from,
-    toolResults: [{ toolCallId: call.id, ok: true, data: { handedOffTo: receiver } }],
+    toolResults: [{ toolCallId: call.id, name: call.name, ok: true, data: { handedOffTo: receiver } }],
   });
   state.config = target;
   state.agentName = target.name;

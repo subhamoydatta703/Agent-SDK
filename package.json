@@ -33,6 +33,9 @@
     "example:handoff": "bun run examples/handoff-router.ts",
     "example:structured": "bun run examples/structured-output.ts",
     "example:streaming": "bun run examples/streaming.ts",
+    "example:mock": "bun run examples/provider-mock.ts",
+    "example:gemini": "bun run examples/provider-gemini.ts",
+    "example:openai": "bun run examples/provider-openai.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs"
   },

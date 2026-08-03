@@ -10,7 +10,7 @@ export interface GeminiProviderOptions {
 
 interface GeminiPart {
   text?: string;
-  functionCall?: { name: string; args?: Record<string, unknown> };
+  functionCall?: { name: string; args?: Record<string, unknown>; thoughtSignature?: string };
   functionResponse?: { name: string; response: Record<string, unknown> };
 }
 
@@ -42,6 +42,16 @@ export class GeminiProvider implements ModelProvider {
     this.apiKey = opts.apiKey ?? process.env.GEMINI_API_KEY ?? '';
     this.model = opts.model ?? 'gemini-2.0-flash';
     this.baseUrl = opts.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta';
+  }
+
+  static fromEnv(model?: string): GeminiProvider {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        'GeminiProvider.fromEnv(): GEMINI_API_KEY is not set. Add it to your environment (or a .env file loaded with dotenv) before constructing the provider.'
+      );
+    }
+    return new GeminiProvider({ apiKey, ...(model ? { model } : {}) });
   }
 
   async complete(messages: ChatMessage[], opts?: ModelCallOptions): Promise<ModelResult> {
@@ -100,7 +110,13 @@ export class GeminiProvider implements ModelProvider {
         const parts: GeminiPart[] = [];
         if (m.content) parts.push({ text: m.content });
         for (const tc of m.toolCalls ?? []) {
-          parts.push({ functionCall: { name: tc.name, args: (tc.args ?? {}) as Record<string, unknown> } });
+          parts.push({
+            functionCall: {
+              name: tc.name,
+              args: (tc.args ?? {}) as Record<string, unknown>,
+              ...(tc.thoughtSignature ? { thoughtSignature: tc.thoughtSignature } : {}),
+            },
+          });
         }
         contents.push({ role: 'model', parts });
       } else if (m.role === 'tool' && m.toolResults) {
@@ -110,7 +126,7 @@ export class GeminiProvider implements ModelProvider {
             parts: [
               {
                 functionResponse: {
-                  name: tr.toolCallId.length ? m.name ?? '' : '',
+                  name: tr.name ?? '',
                   response: tr.ok ? ({ result: tr.data } as Record<string, unknown>) : ({ error: tr.error ?? 'tool failed' } as Record<string, unknown>),
                 },
               },
@@ -133,7 +149,12 @@ export class GeminiProvider implements ModelProvider {
     for (const p of parts) {
       if (p.text) content += p.text;
       if (p.functionCall) {
-        toolCalls.push({ id: randomUUID(), name: p.functionCall.name, args: p.functionCall.args ?? {} });
+        toolCalls.push({
+          id: randomUUID(),
+          name: p.functionCall.name,
+          args: p.functionCall.args ?? {},
+          thoughtSignature: p.functionCall.thoughtSignature,
+        });
       }
     }
     const finish = candidate?.finishReason;

@@ -35,6 +35,9 @@ export default defineConfig({
         items: [
           { text: 'Basic tool call', link: '/examples/basic' },
           { text: 'Handoff / triage router', link: '/examples/handoff-router' },
+          { text: 'Provider: Mock', link: '/examples/provider-mock' },
+          { text: 'Provider: Gemini', link: '/examples/provider-gemini' },
+          { text: 'Provider: OpenAI', link: '/examples/provider-openai' },
         ],
       },
     ],

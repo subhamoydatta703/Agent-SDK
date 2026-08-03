@@ -26,6 +26,16 @@ export class OpenAIProvider implements ModelProvider {
     this.baseUrl = opts.baseUrl ?? 'https://api.openai.com/v1';
   }
 
+  static fromEnv(model?: string): OpenAIProvider {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        'OpenAIProvider.fromEnv(): OPENAI_API_KEY is not set. Add it to your environment (or a .env file loaded with dotenv) before constructing the provider.'
+      );
+    }
+    return new OpenAIProvider({ apiKey, ...(model ? { model } : {}) });
+  }
+
   async complete(messages: ChatMessage[], opts?: ModelCallOptions): Promise<ModelResult> {
     if (!this.apiKey) {
       throw new PermanentModelError(
@@ -126,7 +136,8 @@ export class OpenAIProvider implements ModelProvider {
             totalTokens: body.usage.total_tokens,
           }
         : undefined,
-      finishReason: finish === 'tool_calls' ? 'tool_calls' : finish === 'length' ? 'length' : 'stop',
+      finishReason:
+        finish === 'tool_calls' ? 'tool_calls' : finish === 'length' ? 'length' : finish === 'content_filter' ? 'content_filter' : 'stop',
       raw: body,
     };
   }

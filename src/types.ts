@@ -10,6 +10,8 @@ export interface ToolCallRecord {
   id: string;
   name: string;
   args: unknown;
+  /** Provider-specific data the model requires when the call is replayed (e.g. Gemini 3.x thought_signature). */
+  thoughtSignature?: string;
 }
 
 export interface ToolResultRecord {
@@ -18,6 +20,8 @@ export interface ToolResultRecord {
   data?: unknown;
   error?: string;
   durationMs?: number;
+  /** The name the model used to call the tool (may be namespaced, e.g. Gemini's `default_api:calculator`). */
+  name?: string;
 }
 
 export interface HandoffRecord {

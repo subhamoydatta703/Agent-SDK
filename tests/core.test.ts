@@ -149,3 +149,42 @@ describe('events & trace', () => {
     expect(t.totalDurationMs).toBe(100);
   });
 });
+
+describe('jsonMode vs tools', () => {
+  test('disables JSON mode when tools are declared so tool calling works with outputSchema', async () => {
+    const schema = z.object({ title: z.string(), items: z.array(z.object({ name: z.string(), count: z.number() })) });
+    const model = new MockProvider((_m, _o, index) => {
+      if (index === 0) {
+        return {
+          content: '',
+          toolCalls: [{ id: 't1', name: 'calculator', args: { expression: '5+5' } }],
+          finishReason: 'tool_calls' as const,
+        };
+      }
+      return { content: '{"title":"sum","items":[{"name":"x","count":10}]}', finishReason: 'stop' as const };
+    });
+    const agent = new Agent({
+      name: 'math',
+      instructions: 'Use tools.',
+      model,
+      tools: [calc],
+      outputSchema: schema,
+    });
+    const result = await agent.run<{ title: string }>('x');
+    expect(result.status).toBe('completed');
+    expect(result.data?.title).toBe('sum');
+    expect(model.calls[0]?.opts?.jsonMode).toBe(false);
+  });
+
+  test('keeps JSON mode when no tools are declared', async () => {
+    const model = new MockProvider(() => ({ content: '{"answer":"ok"}', finishReason: 'stop' as const }));
+    const agent = new Agent({
+      name: 'solo',
+      instructions: 'Reply with JSON.',
+      model,
+      outputSchema: z.object({ answer: z.string() }),
+    });
+    await agent.run('hi');
+    expect(model.calls[0]?.opts?.jsonMode).toBe(true);
+  });
+});

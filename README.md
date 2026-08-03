@@ -113,6 +113,9 @@ bun test                 # offline suite (no API keys)
 bun run build            # emit dist/ (+ .d.ts)
 bun run example          # basic single-agent tool demo
 bun run example:handoff  # triage router -> specialist
+bun run example:mock     # provider demo: smart MockProvider (offline)
+bun run example:gemini   # provider demo: Gemini (needs GEMINI_API_KEY)
+bun run example:openai   # provider demo: OpenAI (needs OPENAI_API_KEY)
 bun run example:structured
 bun run example:streaming
 bun run docs:dev         # VitePress docs site
