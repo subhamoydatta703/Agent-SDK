@@ -2,8 +2,7 @@
 
 // Streaming via an async iterator built on top of the event bus.
 // The event stream is the single debugging surface (trace is derived from it too).
-import { Agent, AgentEventBus, calculatorTool, eventStream } from '../src/index.js';
-import { MockProvider } from '../src/provider/mock.js';
+import { Agent, AgentEventBus, MockProvider, calculatorTool, eventStream } from '../src/index.js';
 
 async function main() {
   const events = new AgentEventBus();

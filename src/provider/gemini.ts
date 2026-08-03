@@ -10,7 +10,7 @@ export interface GeminiProviderOptions {
 
 interface GeminiPart {
   text?: string;
-  functionCall?: { name: string; args?: Record<string, unknown>; thoughtSignature?: string };
+  functionCall?: { name: string; args?: Record<string, unknown>; thought_signature?: string };
   functionResponse?: { name: string; response: Record<string, unknown> };
 }
 
@@ -114,7 +114,7 @@ export class GeminiProvider implements ModelProvider {
             functionCall: {
               name: tc.name,
               args: (tc.args ?? {}) as Record<string, unknown>,
-              ...(tc.thoughtSignature ? { thoughtSignature: tc.thoughtSignature } : {}),
+              ...(tc.thoughtSignature ? { thought_signature: tc.thoughtSignature } : {}),
             },
           });
         }
@@ -153,7 +153,7 @@ export class GeminiProvider implements ModelProvider {
           id: randomUUID(),
           name: p.functionCall.name,
           args: p.functionCall.args ?? {},
-          thoughtSignature: p.functionCall.thoughtSignature,
+          thoughtSignature: p.functionCall.thought_signature,
         });
       }
     }

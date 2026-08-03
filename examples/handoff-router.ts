@@ -37,7 +37,7 @@ async function main() {
   const registry = new AgentRegistry([router, researcher, specialist]);
   events.onAny((ev) => console.log('  -', ev.type, JSON.stringify(ev)));
 
-  const result = await router.run('Produce a short research briefing on renewable energy storage.', { registry });
+  const result = await router.run('Produce a short research briefing on renewable energy storage.', { registry, events });
   console.log('\nAgents visited:', result.agents.join(' -> '));
   console.log('Result status:', result.status);
 }

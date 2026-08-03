@@ -4,8 +4,7 @@
 // Runs offline with a MockProvider. To use a real model, swap in:
 //   import { GeminiProvider } from '../src/index.js';
 //   const model = new GeminiProvider({ apiKey: process.env.GEMINI_API_KEY });
-import { Agent, AgentEventBus, calculatorTool, docSenseTool, webSearchTool, type AgentEvent } from '../src/index.js';
-import { MockProvider } from '../src/provider/mock.js';
+import { Agent, AgentEventBus, InMemorySessionStore, MockProvider, calculatorTool, docSenseTool, webSearchTool, type AgentEvent } from '../src/index.js';
 
 async function main() {
   const events = new AgentEventBus();
@@ -32,12 +31,15 @@ async function main() {
   console.log('Streaming events for this run:');
   events.onAny((ev: AgentEvent) => console.log('  -', ev.type, JSON.stringify(ev)));
 
-  const result = await agent.run('Calculate (5+3)*2', { events, sessionId: 'demo-session' });
+  // Share a session store so the second run actually sees history from the first.
+  const sessionStore = new InMemorySessionStore();
+
+  const result = await agent.run('Calculate (5+3)*2', { events, sessionId: 'demo-session', sessionStore });
   console.log('\nRunResult:');
   console.log(JSON.stringify(result, null, 2));
 
-  // Reusing the same sessionId keeps history across runs.
-  const second = await agent.run('Give me the units again.', { events, sessionId: 'demo-session' });
+  // Reusing the same sessionId + sessionStore keeps history across runs.
+  const second = await agent.run('Give me the units again.', { events, sessionId: 'demo-session', sessionStore });
   console.log('\nSecond run (same session):', second.status);
 }
 
