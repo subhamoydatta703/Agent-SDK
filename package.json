@@ -1,6 +1,14 @@
 {
   "name": "@subhamoy/somoy",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subhamoydatta703/Agent-SDK.git"
+  },
+  "homepage": "https://github.com/subhamoydatta703/Agent-SDK#readme",
+  "bugs": {
+    "url": "https://github.com/subhamoydatta703/Agent-SDK/issues"
+  },
   "description": "Somoy (Bengali for 'time') — a transparent, hand-rolled AI Agent SDK for TypeScript. Provider-agnostic, zod-typed, runtime-agnostic (Bun + Node 18+).",
   "type": "module",
   "main": "./dist/index.js",
@@ -44,6 +52,7 @@
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.5"
   },
+  
   "devDependencies": {
     "@types/bun": "^1.1.0",
     "@types/node": "^22.0.0",
