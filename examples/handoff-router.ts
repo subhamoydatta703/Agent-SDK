@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 // Tiered-routing / doctor-style triage: a lightweight router agent hands off to a
 // specialist based on task complexity. Demonstrates handoff_to + loop protection.
 import { Agent, AgentEventBus, AgentRegistry } from '../src/index.js';
@@ -42,5 +44,5 @@ async function main() {
 
 main().catch((e) => {
   console.error(e);
-  process.exit(1);
+  process.exitCode = 1;
 });

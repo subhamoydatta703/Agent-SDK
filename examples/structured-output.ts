@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 // Structured output with a one-pass repair: the first model response is invalid
 // JSON, so Somoy feeds the validation errors back and re-validates.
 import { z } from 'zod';
@@ -33,5 +35,5 @@ async function main() {
 
 main().catch((e) => {
   console.error(e);
-  process.exit(1);
+  process.exitCode = 1;
 });

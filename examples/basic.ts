@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 // Basic single-agent example: tool calling + session reuse, streamed live.
 // Runs offline with a MockProvider. To use a real model, swap in:
 //   import { GeminiProvider } from '../src/index.js';
@@ -41,5 +43,5 @@ async function main() {
 
 main().catch((e) => {
   console.error(e);
-  process.exit(1);
+  process.exitCode = 1;
 });

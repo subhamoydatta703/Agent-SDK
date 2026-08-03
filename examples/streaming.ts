@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 // Streaming via an async iterator built on top of the event bus.
 // The event stream is the single debugging surface (trace is derived from it too).
 import { Agent, AgentEventBus, calculatorTool, eventStream } from '../src/index.js';
@@ -32,5 +34,5 @@ async function main() {
 
 main().catch((e) => {
   console.error(e);
-  process.exit(1);
+  process.exitCode = 1;
 });
