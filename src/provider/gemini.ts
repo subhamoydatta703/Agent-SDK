@@ -10,7 +10,10 @@ export interface GeminiProviderOptions {
 
 interface GeminiPart {
   text?: string;
-  functionCall?: { name: string; args?: Record<string, unknown>; thought_signature?: string };
+  thought?: boolean;
+  /** Opaque per-part signature for Gemini thinking models; must be echoed back on the same part when history is replayed. */
+  thoughtSignature?: string;
+  functionCall?: { name: string; args?: Record<string, unknown> };
   functionResponse?: { name: string; response: Record<string, unknown> };
 }
 
@@ -114,8 +117,8 @@ export class GeminiProvider implements ModelProvider {
             functionCall: {
               name: tc.name,
               args: (tc.args ?? {}) as Record<string, unknown>,
-              ...(tc.thoughtSignature ? { thought_signature: tc.thoughtSignature } : {}),
             },
+            ...(tc.thoughtSignature ? { thoughtSignature: tc.thoughtSignature } : {}),
           });
         }
         contents.push({ role: 'model', parts });
@@ -153,7 +156,7 @@ export class GeminiProvider implements ModelProvider {
           id: randomUUID(),
           name: p.functionCall.name,
           args: p.functionCall.args ?? {},
-          thoughtSignature: p.functionCall.thought_signature,
+          thoughtSignature: p.thoughtSignature,
         });
       }
     }

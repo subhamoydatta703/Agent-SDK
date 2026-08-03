@@ -9,7 +9,7 @@ const cannedWithSignature = {
     {
       content: {
         parts: [
-          { functionCall: { name: 'default_api:calculator', args: { expression: '5+5' }, thought_signature: 'SIG123' } },
+          { functionCall: { name: 'default_api:calculator', args: { expression: '5+5' } }, thoughtSignature: 'SIG123' },
         ],
       },
       finishReason: 'STOP',
@@ -57,7 +57,9 @@ describe('GeminiProvider thought_signature round-trip', () => {
 
     const body = JSON.parse(bodies[0]!) as { contents: any[] };
     const modelPart = body.contents[1]!.parts[0];
-    expect(modelPart.functionCall.thought_signature).toBe('SIG123');
+    expect(modelPart.functionCall.name).toBe('default_api:calculator');
+    expect(modelPart.thoughtSignature).toBe('SIG123');
+    expect(modelPart.functionCall.thoughtSignature).toBeUndefined();
     const userPart = body.contents[2]!.parts[0];
     expect(userPart.functionResponse.name).toBe('default_api:calculator');
   });
@@ -71,7 +73,8 @@ describe('GeminiProvider thought_signature round-trip', () => {
     await provider.complete(messages);
 
     const body = JSON.parse(bodies[0]!) as { contents: any[] };
-    expect(body.contents[0]!.parts[0].functionCall.thought_signature).toBeUndefined();
+    expect(body.contents[0]!.parts[0].thoughtSignature).toBeUndefined();
+    expect(body.contents[0]!.parts[0].functionCall.thoughtSignature).toBeUndefined();
   });
 });
 

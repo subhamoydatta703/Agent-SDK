@@ -11,11 +11,11 @@
 //     tool:start and the CANONICAL tool name on tool:end — and the tool actually runs.
 //   - Tool parameters are emitted Gemini-compatible (no $schema / additionalProperties),
 //     which older Gemini versions would otherwise reject with a 400.
-//   - Gemini 3.x THINKING models (e.g. gemini-3.1-flash-lite) attach a `thought_signature`
-//     to each function call. It MUST be echoed back when history is replayed, or the
-//     follow-up request fails with a 400 ("missing a thought_signature"). Somoy captures
-//     and replays it automatically (snake_case on the wire), so no action is needed.
-//     Older Gemini models (gemini-2.x) work fine without signatures.
+//   - Gemini 3.x THINKING models (e.g. gemini-3.1-flash-lite) attach a `thoughtSignature`
+//     to each function-call PART (a sibling of `functionCall`). It MUST be echoed back at
+//     the part level when history is replayed, or the follow-up request fails with a 400
+//     ("missing a thought_signature"). Somoy captures and replays it automatically, so no
+//     action is needed. Older Gemini models (gemini-2.x) work fine without signatures.
 //
 // Expected output (with a valid GEMINI_API_KEY):
 //
