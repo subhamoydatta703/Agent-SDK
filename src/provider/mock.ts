@@ -16,16 +16,18 @@ export interface MockCall {
 const CALCULATOR = 'calculator';
 
 function extractExpression(text: string): string | null {
-  let candidate = text.replace(/\s*[=?.!]+\s*$/g, '').trim();
+  const candidate = text.replace(/\s*[=?.!]+\s*$/g, '').trim();
   if (!candidate || candidate.length > 200 || !/\d/.test(candidate)) return null;
   const words = candidate.split(/\s+/);
   for (let start = 0; start < words.length; start++) {
-    const sub = words.slice(start).join(' ');
-    try {
-      const value = safeEval(sub);
-      if (Number.isFinite(value)) return sub;
-    } catch {
-      // not a valid expression; drop the next leading word and retry
+    for (let end = words.length; end > start; end--) {
+      const sub = words.slice(start, end).join(' ');
+      try {
+        const value = safeEval(sub);
+        if (Number.isFinite(value)) return sub;
+      } catch {
+        // not a valid expression; shrink the slice and retry
+      }
     }
   }
   return null;

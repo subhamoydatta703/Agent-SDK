@@ -1,4 +1,4 @@
-export type RunStatus = 'completed' | 'max_turns_exceeded' | 'error' | 'guardrail_rejected';
+export type RunStatus = 'completed' | 'max_turns_exceeded' | 'max_tool_calls_exceeded' | 'error' | 'guardrail_rejected';
 
 export type RunErrorKind =
   | 'loop_detected'

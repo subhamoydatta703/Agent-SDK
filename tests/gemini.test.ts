@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { GeminiProvider } from '../src/index.js';
+import { Agent, GeminiProvider, calculatorTool } from '../src/index.js';
 import type { ChatMessage, ModelResult } from '../src/provider/types.js';
 
 const originalFetch = globalThis.fetch;
@@ -72,5 +72,24 @@ describe('GeminiProvider thought_signature round-trip', () => {
 
     const body = JSON.parse(bodies[0]!) as { contents: any[] };
     expect(body.contents[0]!.parts[0].functionCall.thoughtSignature).toBeUndefined();
+  });
+});
+
+describe('GeminiProvider tool parameters (400 regression)', () => {
+  test('a full run sends function declarations without $schema/additionalProperties', async () => {
+    const { bodies } = stubFetch({
+      candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
+    });
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    const agent = new Agent({ name: 'math', instructions: 'x', model: provider, tools: [calculatorTool()] });
+    const result = await agent.run('hi');
+    expect(result.status).toBe('completed');
+
+    const body = JSON.parse(bodies[0]!) as { tools?: Array<{ functionDeclarations: Array<{ parameters: Record<string, unknown> }> }> };
+    const params = body.tools![0]!.functionDeclarations[0]!.parameters;
+    expect(params).not.toHaveProperty('$schema');
+    expect(params).not.toHaveProperty('additionalProperties');
+    expect((params.properties as Record<string, unknown>).expression).toBeDefined();
+    expect(params.required).toEqual(['expression']);
   });
 });

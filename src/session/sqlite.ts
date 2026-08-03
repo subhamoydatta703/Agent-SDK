@@ -10,6 +10,7 @@ interface StatementLike {
 interface DatabaseLike {
   exec(sql: string): unknown;
   prepare(sql: string): StatementLike;
+  close(): void;
 }
 
 interface DbModule {
@@ -81,6 +82,6 @@ export class SQLiteSessionStore implements SessionStore {
   }
 
   close(): void {
-    void this.db;
+    this.db.close();
   }
 }

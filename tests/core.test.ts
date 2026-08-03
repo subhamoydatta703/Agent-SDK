@@ -1,5 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { Agent, AgentEventBus, Trace, calculatorTool } from '../src/index.js';
+import {
+  Agent,
+  AgentEventBus,
+  InMemorySessionStore,
+  Trace,
+  TransientModelError,
+  approvalToolGuardrail,
+  calculatorTool,
+  defineTool,
+  safeEval,
+} from '../src/index.js';
 import { z } from 'zod';
 import { MockProvider } from '../src/provider/mock.js';
 
@@ -186,5 +196,207 @@ describe('jsonMode vs tools', () => {
     });
     await agent.run('hi');
     expect(model.calls[0]?.opts?.jsonMode).toBe(true);
+  });
+});
+
+describe('provider namespaced tool names (Gemini 400 regression)', () => {
+  test('executes tools called with a namespaced name', async () => {
+    let executed = 0;
+    const calc = defineTool({
+      name: 'calculator',
+      description: 'x',
+      inputSchema: z.object({ expression: z.string() }),
+      execute: async ({ expression }) => {
+        executed += 1;
+        return { result: safeEval(expression) };
+      },
+    });
+    const model = new MockProvider((_m, _o, index) => {
+      if (index === 0) {
+        return { content: '', toolCalls: [{ id: 'g1', name: 'default_api:calculator', args: { expression: '5+5' } }], finishReason: 'tool_calls' as const };
+      }
+      return { content: 'ten', finishReason: 'stop' as const };
+    });
+    const agent = new Agent({ name: 'math', instructions: 'Use the calculator.', model, tools: [calc] });
+    const result = await agent.run('what is 5+5?');
+    expect(executed).toBe(1);
+    expect(result.status).toBe('completed');
+  });
+});
+
+describe('input guardrails', () => {
+  test('run exactly once on the first turn', async () => {
+    let runs = 0;
+    const counting = {
+      name: 'count',
+      run: () => {
+        runs += 1;
+        return { pass: true };
+      },
+    };
+    const agent = new Agent({
+      name: 'a',
+      instructions: 'x',
+      model: new MockProvider(() => ({ content: 'ok', finishReason: 'stop' as const })),
+      inputGuardrails: [counting],
+    });
+    await agent.run('hi');
+    expect(runs).toBe(1);
+  });
+
+  test('run again for the agent reached after a handoff', async () => {
+    let runs = 0;
+    const counting = {
+      name: 'count',
+      run: () => {
+        runs += 1;
+        return { pass: true };
+      },
+    };
+    const shared = new MockProvider((_m, _o, index) => {
+      if (index === 0) {
+        return { content: '', toolCalls: [{ id: 'h1', name: 'handoff_to', args: { receiver: 'researcher', reason: 'r' } }], finishReason: 'tool_calls' as const };
+      }
+      return { content: 'done', finishReason: 'stop' as const };
+    });
+    const { AgentRegistry } = await import('../src/index.js');
+    const router = new Agent({ name: 'router', instructions: 'r', model: shared, inputGuardrails: [counting] });
+    const researcher = new Agent({ name: 'researcher', instructions: 'R', model: shared, inputGuardrails: [counting] });
+    const result = await router.run('go', { registry: new AgentRegistry([router, researcher]) });
+    expect(result.status).toBe('completed');
+    expect(runs).toBe(2);
+  });
+});
+
+describe('session persistence', () => {
+  test('persists the final assistant turn', async () => {
+    const store = new InMemorySessionStore();
+    const agent = new Agent({
+      name: 'a',
+      instructions: 'x',
+      model: new MockProvider(() => ({ content: 'hello', finishReason: 'stop' as const })),
+    });
+    const result = await agent.run('hi', { sessionStore: store });
+    expect(result.status).toBe('completed');
+    const turns = await store.get(result.sessionId);
+    expect(turns.map((t) => t.role)).toEqual(['user', 'assistant']);
+    expect(turns[1]?.content).toBe('hello');
+  });
+
+  test('persists the structured-output repair turns', async () => {
+    const store = new InMemorySessionStore();
+    const model = new MockProvider((_m, _o, index) => {
+      if (index === 0) return { content: '{oops', finishReason: 'stop' as const };
+      return { content: '{"answer":"fixed"}', finishReason: 'stop' as const };
+    });
+    const agent = new Agent({
+      name: 'a',
+      instructions: 'x',
+      model,
+      outputSchema: z.object({ answer: z.string() }),
+    });
+    const result = await agent.run<{ answer: string }>('fix', { sessionStore: store });
+    expect(result.status).toBe('completed');
+    const turns = await store.get(result.sessionId);
+    expect(turns.map((t) => t.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+    expect(turns[3]?.content).toBe('{"answer":"fixed"}');
+  });
+});
+
+describe('tool-call budget', () => {
+  test('exhausting maxToolCalls returns max_tool_calls_exceeded', async () => {
+    const model = new MockProvider((_m, _o, index) => ({
+      content: '',
+      toolCalls: [{ id: 'c' + index, name: 'calculator', args: { expression: '1+1' } }],
+      finishReason: 'tool_calls' as const,
+    }));
+    const agent = new Agent({
+      name: 'busy',
+      instructions: 'Keep calling.',
+      model,
+      tools: [calc],
+    });
+    const result = await agent.run('go', { runConfig: { maxToolCalls: 2, maxTurns: 10, maxConsecutiveIdenticalCalls: 100 } });
+    expect(result.status).toBe('max_tool_calls_exceeded');
+    expect(result.reason).toContain('tool calls');
+  });
+});
+
+describe('tool:end events', () => {
+  test('emits tool:end with ok:false for unknown tools', async () => {
+    const events = new AgentEventBus();
+    const ends: string[] = [];
+    events.on('tool:end', (ev) => ends.push(`${ev.name}:${ev.ok}`));
+    const model = new MockProvider((_m, _o, index) => {
+      if (index === 0) {
+        return { content: '', toolCalls: [{ id: 'u1', name: 'no_such_tool', args: {} }], finishReason: 'tool_calls' as const };
+      }
+      return { content: 'ok', finishReason: 'stop' as const };
+    });
+    const agent = new Agent({ name: 'a', instructions: 'x', model, tools: [calc] });
+    const result = await agent.run('hi', { events });
+    expect(result.status).toBe('completed');
+    expect(ends).toContain('no_such_tool:false');
+  });
+
+  test('emits tool:end with ok:false when a tool guardrail blocks', async () => {
+    const events = new AgentEventBus();
+    const ends: string[] = [];
+    events.on('tool:end', (ev) => ends.push(`${ev.name}:${ev.ok}`));
+    const model = new MockProvider((_m, _o, index) => {
+      if (index === 0) {
+        return { content: '', toolCalls: [{ id: 'b1', name: 'calculator', args: { expression: '1+1' } }], finishReason: 'tool_calls' as const };
+      }
+      return { content: 'ok', finishReason: 'stop' as const };
+    });
+    const agent = new Agent({
+      name: 'a',
+      instructions: 'x',
+      model,
+      tools: [calc],
+      toolGuardrails: [approvalToolGuardrail({ requireApproval: async () => false })],
+    });
+    const result = await agent.run('hi', { events });
+    expect(result.status).toBe('completed');
+    expect(ends).toContain('calculator:false');
+  });
+
+  test('unknown tools bypass tool guardrails without crashing', async () => {
+    let guardrailSawUndefined = false;
+    const readsTool = {
+      name: 'reads_tool',
+      run: (tool: unknown) => {
+        if (tool === undefined) guardrailSawUndefined = true;
+        return { pass: true };
+      },
+    };
+    const model = new MockProvider((_m, _o, index) => {
+      if (index === 0) {
+        return { content: '', toolCalls: [{ id: 'u1', name: 'mystery', args: {} }], finishReason: 'tool_calls' as const };
+      }
+      return { content: 'ok', finishReason: 'stop' as const };
+    });
+    const agent = new Agent({ name: 'a', instructions: 'x', model, tools: [calc], toolGuardrails: [readsTool] });
+    const result = await agent.run('hi');
+    expect(result.status).toBe('completed');
+    expect(guardrailSawUndefined).toBe(false);
+  });
+});
+
+describe('abort handling', () => {
+  test('aborting the run short-circuits model retries and reports timeout', async () => {
+    let attempts = 0;
+    const model = new MockProvider(() => {
+      attempts += 1;
+      throw new TransientModelError('boom');
+    });
+    const agent = new Agent({ name: 'a', instructions: 'x', model });
+    const ac = new AbortController();
+    const promise = agent.run('hi', { signal: ac.signal, runConfig: { maxRetries: 3, retryBaseDelayMs: 100 } });
+    setTimeout(() => ac.abort(), 10);
+    const result = await promise;
+    expect(attempts).toBe(1);
+    expect(result.status).toBe('error');
+    expect(result.error?.kind).toBe('timeout');
   });
 });

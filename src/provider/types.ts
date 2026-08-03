@@ -19,7 +19,6 @@ export interface ModelCallOptions {
   temperature?: number;
   jsonMode?: boolean;
   signal?: AbortSignal;
-  stop?: string[];
 }
 
 export interface ModelUsage {

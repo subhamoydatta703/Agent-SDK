@@ -5,9 +5,17 @@
 // Demonstrates TOOL CALLING + STRUCTURED OUTPUT together. Somoy only enables
 // JSON mode when no tools are declared, so an outputSchema and tools coexist.
 //
+// Two Gemini-specific behaviors handled for you:
+//   - Gemini returns tool-call names NAMESPACED (e.g. "default_api:calculator").
+//     Somoy matches them to your registered tool, so you see the raw name on
+//     tool:start and the CANONICAL tool name on tool:end — and the tool actually runs.
+//   - Tool parameters are emitted Gemini-compatible (no $schema / additionalProperties),
+//     which older Gemini versions would otherwise reject with a 400.
+//
 // Expected output (with a valid GEMINI_API_KEY):
 //
 //   Q: What is (5+3)*2?
+//      [tool:start] default_api:calculator args={"expression":"(5+3)*2"}
 //      [tool:end] calculator -> {"result":16}
 //      status     : completed
 //      text       : "{\"question\":\"What is (5+3)*2?\",\"answer\":16}"
@@ -47,8 +55,11 @@ function showResult(q: string, result: RunResult) {
 
 async function main() {
   const events = new AgentEventBus();
+  events.on('tool:start', (ev) => console.log(`   [tool:start] ${ev.toolCall.name} args=${JSON.stringify(ev.toolCall.args)}`));
   events.on('tool:end', (ev) => console.log(`   [tool:end] ${ev.name} -> ${JSON.stringify(ev.data)}`));
 
+  // fromEnv() throws a clear error if GEMINI_API_KEY is missing.
+  // To hit an alternative endpoint, pass baseUrl: new GeminiProvider({ baseUrl, model }).
   const model = GeminiProvider.fromEnv('gemini-3.1-flash-lite');
 
   const agent = new Agent({

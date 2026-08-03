@@ -39,5 +39,9 @@ console.log(result.status, result.data); // completed { question: '...', answer:
   missing. `new OpenAIProvider({ apiKey })` also works.
 - **Tool calling + `outputSchema` coexist**: Somoy only enables JSON mode when no tools are
   declared, so the model can call `calculator` first and then emit the schema JSON.
+- **Canonical tool names**: OpenAI returns un-namespaced tool-call names (`calculator`), so
+  `tool:start` and `tool:end` report the same name.
+- Tool parameters are emitted without `$schema` / `additionalProperties`, so one schema works
+  unchanged across every provider.
 - Custom `baseUrl` is supported for OpenAI-compatible endpoints
-  (`new OpenAIProvider({ baseUrl: 'https://.../v1' })`).
+  (`new OpenAIProvider({ baseUrl: 'https://api.openrouter.ai/api/v1', model: '...' })`).

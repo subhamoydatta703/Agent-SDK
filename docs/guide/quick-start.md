@@ -36,7 +36,7 @@ const agent = new Agent({
 
 ```ts
 {
-  status: 'completed',        // 'completed' | 'max_turns_exceeded' | 'error' | 'guardrail_rejected'
+  status: 'completed',        // 'completed' | 'max_turns_exceeded' | 'max_tool_calls_exceeded' | 'error' | 'guardrail_rejected'
   text: '...',                // final assistant text
   data: undefined,            // present when an outputSchema is declared
   turns: 1, toolCalls: 0,     // iteration counters

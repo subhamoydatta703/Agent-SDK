@@ -54,11 +54,17 @@ export async function retryWithBackoff<T>(
 ): Promise<{ ok: true; value: T; attempts: number } | { ok: false; error: unknown; attempts: number }> {
   let attempts = 0;
   while (true) {
+    if (opts.signal?.aborted) {
+      return { ok: false, error: new Error('Run aborted'), attempts };
+    }
     attempts += 1;
     try {
       const value = await opts.task();
       return { ok: true, value, attempts };
     } catch (err) {
+      if (opts.signal?.aborted) {
+        return { ok: false, error: new Error('Run aborted'), attempts };
+      }
       if (attempts > opts.maxRetries || !(opts.isTransient ? opts.isTransient(err) : true)) {
         return { ok: false, error: err, attempts };
       }
@@ -66,7 +72,7 @@ export async function retryWithBackoff<T>(
       const finalDelay = opts.jitter === false ? delay : delay * (0.5 + Math.random());
       opts.onRetry?.(attempts, Math.round(finalDelay), err);
       if (opts.signal?.aborted) {
-        return { ok: false, error: new Error('Aborted'), attempts };
+        return { ok: false, error: new Error('Run aborted'), attempts };
       }
       await sleep(finalDelay);
     }

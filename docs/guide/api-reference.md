@@ -89,6 +89,6 @@ Built-ins: `GeminiProvider`, `OpenAIProvider`, `MockProvider`.
 ## RunResult
 
 ```ts
-type RunStatus = 'completed' | 'max_turns_exceeded' | 'error' | 'guardrail_rejected';
+type RunStatus = 'completed' | 'max_turns_exceeded' | 'max_tool_calls_exceeded' | 'error' | 'guardrail_rejected';
 interface RunResult<T> { status, data?, text?, runId, sessionId, turns, toolCalls, agents, durationMs, reason?, error? }
 ```

@@ -1,14 +1,38 @@
 import type { ZodType } from 'zod';
 
+/** Scans from an opening `{`/`[` to its balanced close, ignoring braces inside string literals. */
+function balancedSlice(text: string, open: string, close: string): string | null {
+  const start = text.indexOf(open);
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') {
+        i++;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === open) {
+      depth++;
+    } else if (ch === close) {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 export function extractJsonBlock(text: string): string | null {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1]!.trim();
-  const brace = trimmed.match(/\{[\s\S]*\}/);
-  if (brace) return brace[0];
-  const bracket = trimmed.match(/\[[\s\S]*\]/);
-  if (bracket) return bracket[0];
-  return null;
+  return balancedSlice(trimmed, '{', '}') ?? balancedSlice(trimmed, '[', ']');
 }
 
 export type ParseOutcome<T> = { ok: true; data: T } | { ok: false; errors: string[] };

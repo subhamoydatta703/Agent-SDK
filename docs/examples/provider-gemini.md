@@ -36,8 +36,14 @@ console.log(result.status, result.data); // completed { question: '...', answer:
 ## Notes
 
 - `GeminiProvider.fromEnv(model?)` reads `GEMINI_API_KEY` and throws a clear error if it is
-  missing. `new GeminiProvider({ apiKey })` also works.
+  missing. `new GeminiProvider({ apiKey })` also works. An alternate endpoint can be reached
+  with `new GeminiProvider({ baseUrl, model })`.
 - **Tool calling + `outputSchema` coexist**: Somoy only enables JSON mode when no tools are
   declared, so Gemini is free to call `calculator` first and then emit the schema JSON.
+- **Namespaced tool names**: Gemini returns tool-call names like `default_api:calculator`.
+  Somoy matches them to your registered tools (see `tool:start` for the raw name, `tool:end`
+  for the canonical name), so tools actually execute.
+- **Gemini-compatible parameters**: tool schemas are emitted without `$schema` /
+  `additionalProperties`, which Gemini would otherwise reject with a 400.
 - Gemini 3.x models require thought-signature round-tripping; the adapter handles this
   automatically (see [Providers](/guide/providers)).

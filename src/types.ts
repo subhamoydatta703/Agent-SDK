@@ -89,6 +89,5 @@ export interface RunState {
   toolCallCount: number;
   handoffChain: string[];
   startTime: number;
-  signal?: AbortSignal;
   consecutiveIdentical: { name: string; argsKey: string; count: number } | null;
 }

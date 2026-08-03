@@ -166,7 +166,7 @@ export function traceFromBus(bus: AgentEventBus, runId: string): Trace {
   });
   bus.on('handoff:end', (ev) => {
     if (ev.runId !== runId) return;
-    trace.handoffs.push({ from: ev.from, to: ev.to, reason: '' });
+    trace.handoffs.push({ from: ev.from, to: ev.to, reason: ev.reason });
     if (!trace.agents.includes(ev.to)) trace.agents.push(ev.to);
   });
   bus.on('guardrail:triggered', (ev) => {

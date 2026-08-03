@@ -10,7 +10,8 @@ Every exit path resolves to a `RunResult` with a `status` discriminant:
 | Status | Meaning |
 | --- | --- |
 | `completed` | a final answer (and `data` if `outputSchema` set) |
-| `max_turns_exceeded` | turn or tool-call budget exhausted |
+| `max_turns_exceeded` | turn budget exhausted |
+| `max_tool_calls_exceeded` | tool-call budget exhausted |
 | `error` | loop/handoff loop, model failure, timeout, structured-output failure |
 | `guardrail_rejected` | an input/output/tool guardrail blocked the run |
 

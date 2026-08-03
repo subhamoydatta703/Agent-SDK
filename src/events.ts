@@ -20,7 +20,7 @@ export type AgentEvent =
   | { type: 'model:call'; runId: string; agentName: string; attempt: number; usage?: ModelUsage }
   | { type: 'retry'; runId: string; attempt: number; maxRetries: number; delayMs: number; error: string }
   | { type: 'handoff:start'; runId: string; from: string; to: string; reason: string }
-  | { type: 'handoff:end'; runId: string; from: string; to: string }
+  | { type: 'handoff:end'; runId: string; from: string; to: string; reason: string }
   | {
       type: 'guardrail:triggered';
       runId: string;

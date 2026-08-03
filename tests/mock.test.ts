@@ -38,6 +38,20 @@ describe('MockProvider smart default', () => {
     expect(result.text.length).toBeGreaterThan(0);
   });
 
+  test('extracts expressions even with trailing words', async () => {
+    for (const q of ['calculate 5+3 now', 'please compute 100/8 thanks']) {
+      const agent = new Agent({
+        name: 'math',
+        instructions: 'Use the calculator tool.',
+        model: new MockProvider(),
+        tools: [calculatorTool()],
+      });
+      const result = await agent.run(q);
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   test('custom handler still takes precedence', async () => {
     const model = new MockProvider(() => ({ content: 'custom', finishReason: 'stop' as const }));
     const agent = new Agent({ name: 'chat', instructions: 'x', model });

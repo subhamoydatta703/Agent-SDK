@@ -25,6 +25,15 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/**
+ * Providers may namespace tool-call names (e.g. Gemini returns `default_api:calculator`).
+ * Match the registered tool name either exactly or as the suffix after the last colon,
+ * while keeping the original namespaced name on records for replay/echo.
+ */
+function toolNameMatches(toolName: string, callName: string): boolean {
+  return toolName === callName || callName.endsWith(`:${toolName}`);
+}
+
 export interface LoopContext {
   runId: string;
   registry: Map<string, AgentConfig>;
@@ -167,36 +176,14 @@ async function callModel(
 }
 
 async function executeTool(state: RunState, ctx: LoopContext, call: ToolCallRecord): Promise<ToolResultRecord> {
-  const tool = (state.config.tools ?? []).find((t) => t.name === call.name);
-  const gr = await runToolGuardrails(state.config, tool, call.args, state.agentName, ctx.events, ctx.runId);
-  if (!gr.pass) {
-    return { toolCallId: call.id, name: call.name, ok: false, error: gr.reason ?? `Tool '${call.name}' blocked by a guardrail.`, durationMs: 0 };
-  }
-  if (!tool) {
-    return { toolCallId: call.id, name: call.name, ok: false, error: `Unknown tool '${call.name}'.`, durationMs: 0 };
-  }
-  const parsed = tool.inputSchema.safeParse(call.args);
-  if (!parsed.success) {
-    return {
-      toolCallId: call.id,
-      name: call.name,
-      ok: false,
-      error: `Invalid arguments for '${call.name}': ${parsed.error.issues.map((i) => i.message).join('; ')}`,
-      durationMs: 0,
-    };
-  }
-  ctx.events.emit({ type: 'tool:start', runId: ctx.runId, toolCall: call });
-  const started = Date.now();
-  const toolAbort = new AbortController();
-  const wireAbort = () => toolAbort.abort();
-  ctx.runAbort.signal.addEventListener('abort', wireAbort, { once: true });
-  const finish = (rec: ToolResultRecord) => {
+  const tool = (state.config.tools ?? []).find((t) => toolNameMatches(t.name, call.name));
+  const finish = (rec: ToolResultRecord): ToolResultRecord => {
     const record: ToolResultRecord = { name: call.name, ...rec };
     ctx.events.emit({
       type: 'tool:end',
       runId: ctx.runId,
       toolCallId: call.id,
-      name: tool.name,
+      name: tool?.name ?? call.name,
       ok: record.ok,
       data: record.data,
       error: record.error,
@@ -204,6 +191,27 @@ async function executeTool(state: RunState, ctx: LoopContext, call: ToolCallReco
     });
     return record;
   };
+  if (!tool) {
+    return finish({ toolCallId: call.id, ok: false, error: `Unknown tool '${call.name}'.`, durationMs: 0 });
+  }
+  const gr = await runToolGuardrails(state.config, tool, call.args, state.agentName, ctx.events, ctx.runId);
+  if (!gr.pass) {
+    return finish({ toolCallId: call.id, ok: false, error: gr.reason ?? `Tool '${call.name}' blocked by a guardrail.`, durationMs: 0 });
+  }
+  const parsed = tool.inputSchema.safeParse(call.args);
+  if (!parsed.success) {
+    return finish({
+      toolCallId: call.id,
+      ok: false,
+      error: `Invalid arguments for '${call.name}': ${parsed.error.issues.map((i) => i.message).join('; ')}`,
+      durationMs: 0,
+    });
+  }
+  ctx.events.emit({ type: 'tool:start', runId: ctx.runId, toolCall: call });
+  const started = Date.now();
+  const toolAbort = new AbortController();
+  const wireAbort = () => toolAbort.abort();
+  ctx.runAbort.signal.addEventListener('abort', wireAbort, { once: true });
   try {
     const out = await tool.execute(parsed.data, {
       session: state.sessionStore,
@@ -243,13 +251,20 @@ async function loop(state: RunState, ctx: LoopContext): Promise<RunResult> {
         error: { kind: 'timeout', message: 'Run exceeded the timeout or was aborted.' },
       });
     }
-    const gir = await runInputGuardrails(state.config, state.input, state.agentName, ctx.events, ctx.runId);
-    if (!gir.pass) {
-      return makeResult(state, ctx, 'guardrail_rejected', { reason: gir.reason });
+    if (state.turnCount > 0) {
+      const gir = await runInputGuardrails(state.config, state.input, state.agentName, ctx.events, ctx.runId);
+      if (!gir.pass) {
+        return makeResult(state, ctx, 'guardrail_rejected', { reason: gir.reason });
+      }
     }
     const messages = await buildContext(state);
     const call = await callModel(state, ctx, messages);
     if (!call.ok) {
+      if (ctx.runAbort.signal.aborted) {
+        return makeResult(state, ctx, 'error', {
+          error: { kind: 'timeout', message: 'Run exceeded the timeout or was aborted.' },
+        });
+      }
       return makeResult(state, ctx, 'error', {
         error: {
           kind: 'model_error',
@@ -265,7 +280,7 @@ async function loop(state: RunState, ctx: LoopContext): Promise<RunResult> {
 
     if (modelResult.toolCalls && modelResult.toolCalls.length > 0) {
       if (state.toolCallCount + modelResult.toolCalls.length > state.runConfig.maxToolCalls) {
-        return makeResult(state, ctx, 'max_turns_exceeded', { reason: 'Maximum number of tool calls exceeded.' });
+        return makeResult(state, ctx, 'max_tool_calls_exceeded', { reason: 'Maximum number of tool calls exceeded.' });
       }
       const ld = detectLoop(state, modelResult.toolCalls);
       if (ld.detected) {
@@ -285,7 +300,7 @@ async function loop(state: RunState, ctx: LoopContext): Promise<RunResult> {
       });
 
       for (const call of modelResult.toolCalls) {
-        if (call.name === HANDOFF_TOOL) {
+        if (toolNameMatches(HANDOFF_TOOL, call.name)) {
           const parsed = handoffInputSchema.safeParse(call.args);
           if (!parsed.success) {
             await appendTurn(state, {
@@ -347,21 +362,15 @@ async function handleHandoff(
   }
   ctx.events.emit({ type: 'handoff:start', runId: ctx.runId, from, to: receiver, reason });
   await appendTurn(state, {
-    role: 'assistant',
-    agentName: from,
-    content: `[delegating to '${receiver}': ${reason}]`,
-    handoff: { from, to: receiver, reason },
-  });
-  await appendTurn(state, {
     role: 'tool',
     agentName: from,
-    toolResults: [{ toolCallId: call.id, name: call.name, ok: true, data: { handedOffTo: receiver } }],
+    toolResults: [{ toolCallId: call.id, name: call.name, ok: true, data: { handedOffTo: receiver, reason } }],
   });
   state.config = target;
   state.agentName = target.name;
   state.handoffChain.push(target.name);
   ctx.agents.push(target.name);
-  ctx.events.emit({ type: 'handoff:end', runId: ctx.runId, from, to: receiver });
+  ctx.events.emit({ type: 'handoff:end', runId: ctx.runId, from, to: receiver, reason });
   return 'continue';
 }
 
@@ -369,6 +378,7 @@ async function finalize(state: RunState, ctx: LoopContext, text: string): Promis
   let finalText = text;
   let structured = false;
   let data: unknown;
+  let finalPersisted = false;
   const schema: ZodType | undefined = state.config.outputSchema;
   if (schema) {
     structured = true;
@@ -391,7 +401,11 @@ async function finalize(state: RunState, ctx: LoopContext, text: string): Promis
           },
         });
       }
+      await appendTurn(state, { role: 'assistant', agentName: state.agentName, content: finalText });
+      await appendTurn(state, { role: 'user', agentName: state.agentName, content: fixRequest });
       const repaired = parseStructured(call.value.content, schema);
+      await appendTurn(state, { role: 'assistant', agentName: state.agentName, content: call.value.content });
+      ctx.events.emit({ type: 'text:delta', runId: ctx.runId, agentName: state.agentName, delta: call.value.content });
       if (!repaired.ok) {
         return makeResult(state, ctx, 'error', {
           error: { kind: 'structured_output', message: 'Structured output failed validation after the repair pass.', details: repaired.errors },
@@ -399,8 +413,12 @@ async function finalize(state: RunState, ctx: LoopContext, text: string): Promis
       }
       finalText = call.value.content;
       parsed = repaired;
+      finalPersisted = true;
     }
     data = parsed.ok ? parsed.data : undefined;
+  }
+  if (!finalPersisted) {
+    await appendTurn(state, { role: 'assistant', agentName: state.agentName, content: finalText });
   }
   const og = await runOutputGuardrails(state.config, finalText, state.agentName, ctx.events, ctx.runId);
   if (!og.pass) {
@@ -434,7 +452,6 @@ export async function execute(req: ExecuteRequest): Promise<RunResult> {
     toolCallCount: 0,
     handoffChain: [req.initialAgent.name],
     startTime: Date.now(),
-    signal: req.signal,
     consecutiveIdentical: null,
   };
   const deadlineTimer = setTimeout(() => ctx.runAbort.abort(), req.runConfig.timeoutMs);

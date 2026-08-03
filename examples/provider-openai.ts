@@ -5,9 +5,18 @@
 // Demonstrates TOOL CALLING + STRUCTURED OUTPUT together. Somoy only enables
 // JSON mode when no tools are declared, so an outputSchema and tools coexist.
 //
+// Provider notes:
+//   - OpenAI returns tool-call names un-namespaced ("calculator"), so tool:start
+//     and tool:end show the same canonical name.
+//   - Tool parameters are emitted without $schema / additionalProperties (the same
+//     schema works across every provider).
+//   - `baseUrl` is configurable, so any OpenAI-compatible endpoint works
+//     (OpenRouter, local vLLM, Azure-OpenAI-style gateways, ...).
+//
 // Expected output (with a valid OPENAI_API_KEY):
 //
 //   Q: What is (5+3)*2?
+//      [tool:start] calculator args={"expression":"(5+3)*2"}
 //      [tool:end] calculator -> {"result":16}
 //      status     : completed
 //      text       : "{\"question\":\"What is (5+3)*2?\",\"answer\":16}"
@@ -47,8 +56,12 @@ function showResult(q: string, result: RunResult) {
 
 async function main() {
   const events = new AgentEventBus();
+  events.on('tool:start', (ev) => console.log(`   [tool:start] ${ev.toolCall.name} args=${JSON.stringify(ev.toolCall.args)}`));
   events.on('tool:end', (ev) => console.log(`   [tool:end] ${ev.name} -> ${JSON.stringify(ev.data)}`));
 
+  // fromEnv() throws a clear error if OPENAI_API_KEY is missing.
+  // For an OpenAI-compatible endpoint use:
+  //   const model = new OpenAIProvider({ baseUrl: 'https://api.openrouter.ai/api/v1', model: '...' });
   const model = OpenAIProvider.fromEnv('gpt-4o-mini');
 
   const agent = new Agent({
