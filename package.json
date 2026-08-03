@@ -1,6 +1,6 @@
 {
   "name": "@subhamoy/somoy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/subhamoydatta703/Agent-SDK.git"
@@ -52,7 +52,6 @@
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.5"
   },
-  
   "devDependencies": {
     "@types/bun": "^1.1.0",
     "@types/node": "^22.0.0",
